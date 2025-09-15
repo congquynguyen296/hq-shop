@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { Filter, Grid, List, ChevronLeft, ChevronRight } from "lucide-react";
@@ -9,6 +10,8 @@ export default function Products() {
   const [viewMode, setViewMode] = useState("grid");
   const [sortBy, setSortBy] = useState("popular");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
@@ -20,7 +23,8 @@ export default function Products() {
 
   // Server-side data and pagination (lazy load)
   const [items, setItems] = useState([]);
-  const [hasNextPage, setHasNextPage] = useState(true);
+  // kept for potential UI use; currently derived via currentPage/totalPages
+  // const [hasNextPage, setHasNextPage] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchPage = async (page) => {
@@ -40,21 +44,24 @@ export default function Products() {
         queryParams.maxPrice = filters.priceRange[1];
       }
       if (filters.rating?.length) queryParams.minRating = Math.min(...filters.rating);
+      if (filters.search && filters.search.trim()) queryParams.query = filters.search.trim();
       const res = await apiGet('/api/search', queryParams);
       const data = res.data || [];
-      const pagination = res.pagination || { hasNextPage: false };
-      if (page === 1) setItems(data);
-      else setItems((prev) => [...prev, ...data]);
-      setHasNextPage(!!pagination.hasNextPage);
+      const pagination = res.pagination || { currentPage: page, totalPages: 1, totalCount: data.length, hasNextPage: false };
+      // Replace items for the selected page
+      setItems(data);
+      setCurrentPage(Number(pagination.currentPage) || page);
+      setTotalPages(Number(pagination.totalPages) || 1);
+      setTotalCount(Number(pagination.totalCount) || data.length);
+      // pagination.hasNextPage can be derived by currentPage/totalPages
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleLoadMore = () => {
-    const next = currentPage + 1;
-    setCurrentPage(next);
-    fetchPage(next);
+  const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages || page === currentPage) return;
+    fetchPage(page);
   };
 
   const handleFilterChange = (newFilters) => {
@@ -122,7 +129,7 @@ export default function Products() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <div className="flex items-center gap-4">
                 <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Showing {items.length} products
+                  Showing {items.length} of {totalCount} products
                 </span>
               </div>
 
@@ -212,15 +219,36 @@ export default function Products() {
               </div>
             )}
 
-            {/* Load More */}
-            {hasNextPage && (
-              <div className="flex justify-center mt-12">
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2 mt-12">
                 <button
-                  onClick={handleLoadMore}
-                  disabled={isLoading}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 transition text-white rounded-md disabled:opacity-50"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={isLoading || currentPage === 1}
+                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-slate-700 dark:text-slate-200 disabled:opacity-50"
                 >
-                  {isLoading ? 'Loading...' : 'Load More'}
+                  Prev
+                </button>
+                {Array.from({ length: totalPages }).map((_, i) => {
+                  const pageNum = i + 1;
+                  const isActive = pageNum === currentPage;
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      disabled={isLoading}
+                      className={`${isActive ? 'bg-purple-600 text-white border-purple-600' : 'text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'} px-3 py-2 border rounded-md`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={isLoading || currentPage === totalPages}
+                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                >
+                  Next
                 </button>
               </div>
             )}

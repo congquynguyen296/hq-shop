@@ -1,4 +1,5 @@
 import Product from "../models/Product";
+import esClient from "../config/elastic";
 
 export interface SearchFilters {
   query?: string;
@@ -14,7 +15,14 @@ export interface SearchFilters {
   isBestSeller?: boolean;
   isNewProduct?: boolean;
   tags?: string | string[];
-  sortBy?: "price" | "rating" | "views" | "sold" | "discount" | "createdAt" | "relevance";
+  sortBy?:
+    | "price"
+    | "rating"
+    | "views"
+    | "sold"
+    | "discount"
+    | "createdAt"
+    | "relevance";
   sortOrder?: "asc" | "desc";
   page?: number;
   limit?: number;
@@ -182,8 +190,20 @@ export async function getFilterOptionsService() {
   const [categories, brands, priceRange, discountRange] = await Promise.all([
     Product.distinct("category"),
     Product.distinct("brand").then((brands) => brands.filter((b) => b)),
-    Product.aggregate([{ $group: { _id: null, min: { $min: "$price" }, max: { $max: "$price" } } }]),
-    Product.aggregate([{ $group: { _id: null, min: { $min: "$discount" }, max: { $max: "$discount" } } }]),
+    Product.aggregate([
+      {
+        $group: { _id: null, min: { $min: "$price" }, max: { $max: "$price" } },
+      },
+    ]),
+    Product.aggregate([
+      {
+        $group: {
+          _id: null,
+          min: { $min: "$discount" },
+          max: { $max: "$discount" },
+        },
+      },
+    ]),
   ]);
 
   return {
@@ -194,4 +214,25 @@ export async function getFilterOptionsService() {
   };
 }
 
+// Search Elastic
+export const syncProductsToES = async () => {
+  const products = await Product.find();
+  const body = products.flatMap((doc) => [
+    { index: { _index: "products", _id: doc.id.toString() } },
+    {
+      id: doc.id,
+      name: doc.name,
+      description: doc.description,
+      category: doc.category,
+      brand: (doc as any).brand,
+      tags: (doc as any).tags,
+      price: doc.price,
+      offerPrice: (doc as any).offerPrice,
+      rating: (doc as any).rating,
+      image: (doc as any).image,
+    },
+  ]);
 
+  await esClient.bulk({ refresh: true, body });
+  console.log("Synced products to Elasticsearch");
+};
