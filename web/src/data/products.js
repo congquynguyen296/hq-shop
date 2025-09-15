@@ -1,5 +1,5 @@
 export const products = [
-  { id: 1, name: "MacBook Pro 16-inch", category: "Laptop", price: 2799, offerPrice: 2499, rating: 4.8, images: ["https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=1000&auto=format&fit=crop"] },
+  { id: 1, name: "MacBook Pro 16-inch", category: "Laptop", price: 1799, offerPrice: 1499, rating: 4.8, images: ["https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=1000&auto=format&fit=crop"] },
   { id: 2, name: "iPhone 15 Pro Max", category: "Phone", price: 1299, offerPrice: 1199, rating: 4.9, images: ["https://images.unsplash.com/photo-1592750475338-74b7b21085ab?q=80&w=1000&auto=format&fit=crop"] },
   { id: 3, name: "Sony WH-1000XM5", category: "Headphones", price: 449, offerPrice: 399, rating: 4.7, images: ["https://images.unsplash.com/photo-1583394838336-acd977736f90?q=80&w=1000&auto=format&fit=crop"] },
   { id: 4, name: "Samsung 4K Monitor", category: "Monitor", price: 699, offerPrice: 599, rating: 4.6, images: ["https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?q=80&w=1000&auto=format&fit=crop"] },

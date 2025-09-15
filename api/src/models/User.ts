@@ -27,7 +27,7 @@ const userSchema = new Schema<IUser>(
     password: {
       type: String,
       required: true,
-      minlength: 6,
+      minlength: 1,
     },
     firstName: {
       type: String,
@@ -81,6 +81,6 @@ userSchema.methods.comparePassword = async function (
 };
 
 // Index for email
-userSchema.index({ email: 1 });
+// userSchema.index({ email: 1 });
 
 export default mongoose.model<IUser>("User", userSchema);

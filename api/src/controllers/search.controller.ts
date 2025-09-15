@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import Product, { IProduct } from "../models/Product";
+import { getFilterOptionsService, getPopularService, getSuggestionsService, searchProductsService } from "../services/search.service";
 
 // Interface for search filters
 interface SearchFilters {
@@ -32,166 +33,15 @@ interface SearchFilters {
 // Advanced search with fuzzy search and multiple filters
 export const searchProducts = async (req: Request, res: Response) => {
   try {
-    const {
-      query,
-      category,
-      brand,
-      minPrice,
-      maxPrice,
-      minDiscount,
-      maxDiscount,
-      minRating,
-      minViews,
-      minSold,
-      isBestSeller,
-      isNewProduct,
-      tags,
-      sortBy = "relevance",
-      sortOrder = "desc",
-      page = 1,
-      limit = 20,
-    }: SearchFilters = req.query;
-
-    // Build the base filter object
-    const filter: any = {};
-
-    // Text search (fuzzy search)
-    if (query && query.trim()) {
-      filter.$text = { $search: query.trim() };
-    }
-
-    // Category filter
-    if (category) {
-      if (Array.isArray(category)) {
-        filter.category = { $in: category };
-      } else {
-        filter.category = category;
-      }
-    }
-
-    // Brand filter
-    if (brand) {
-      if (Array.isArray(brand)) {
-        filter.brand = { $in: brand };
-      } else {
-        filter.brand = brand;
-      }
-    }
-
-    // Price range filter
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      filter.price = {};
-      if (minPrice !== undefined) filter.price.$gte = Number(minPrice);
-      if (maxPrice !== undefined) filter.price.$lte = Number(maxPrice);
-    }
-
-    // Discount range filter
-    if (minDiscount !== undefined || maxDiscount !== undefined) {
-      filter.discount = {};
-      if (minDiscount !== undefined) filter.discount.$gte = Number(minDiscount);
-      if (maxDiscount !== undefined) filter.discount.$lte = Number(maxDiscount);
-    }
-
-    // Rating filter
-    if (minRating !== undefined) {
-      filter.rating = { $gte: Number(minRating) };
-    }
-
-    // Views filter
-    if (minViews !== undefined) {
-      filter.views = { $gte: Number(minViews) };
-    }
-
-    // Sold filter
-    if (minSold !== undefined) {
-      filter.sold = { $gte: Number(minSold) };
-    }
-
-    // Boolean filters
-    if (isBestSeller !== undefined) {
-      filter.isBestSeller = isBestSeller === true;
-    }
-
-    if (isNewProduct !== undefined) {
-      filter.isNewProduct = isNewProduct === true;
-    }
-
-    // Tags filter
-    if (tags) {
-      if (Array.isArray(tags)) {
-        filter.tags = { $in: tags };
-      } else {
-        filter.tags = { $in: [tags] };
-      }
-    }
-
-    // Build sort object
-    let sort: any = {};
-
-    if (sortBy === "relevance" && query) {
-      // Use text score for relevance when searching
-      sort = { score: { $meta: "textScore" } };
-    } else {
-      const sortField = sortBy === "createdAt" ? "createdAt" : sortBy;
-      sort[sortField] = sortOrder === "asc" ? 1 : -1;
-    }
-
-    // Pagination
-    const skip = (Number(page) - 1) * Number(limit);
-    const limitNum = Number(limit);
-
-    // Execute search with aggregation pipeline for better performance
-    const pipeline: any[] = [{ $match: filter }];
-
-    // Add text score if searching
-    if (query && query.trim()) {
-      pipeline.push({ $addFields: { score: { $meta: "textScore" } } });
-    }
-
-    // Add sorting
-    pipeline.push({ $sort: sort });
-
-    // Add pagination
-    pipeline.push({ $skip: skip }, { $limit: limitNum });
-
-    // Execute aggregation
-    const products = await Product.aggregate(pipeline);
-
-    // Get total count for pagination
-    const totalCount = await Product.countDocuments(filter);
-
-    // Calculate pagination info
-    const totalPages = Math.ceil(totalCount / limitNum);
-    const hasNextPage = Number(page) < totalPages;
-    const hasPrevPage = Number(page) > 1;
-
+    const result = await searchProductsService(req.query as any);
     res.status(200).json({
       success: true,
-      data: products,
-      pagination: {
-        currentPage: Number(page),
-        totalPages,
-        totalCount,
-        hasNextPage,
-        hasPrevPage,
-        limit: limitNum,
-      },
-      filters: {
-        query,
-        category,
-        brand,
-        priceRange: { min: minPrice, max: maxPrice },
-        discountRange: { min: minDiscount, max: maxDiscount },
-        minRating,
-        minViews,
-        minSold,
-        isBestSeller,
-        isNewProduct,
-        tags,
-      },
+      data: result.products,
+      pagination: result.pagination,
+      filters: req.query,
       sort: {
-        by: sortBy,
-        order: sortOrder,
+        by: (req.query as any).sortBy || "relevance",
+        order: (req.query as any).sortOrder || "desc",
       },
     });
   } catch (error) {
@@ -217,61 +67,8 @@ export const getSearchSuggestions = async (req: Request, res: Response) => {
 
     const searchQuery = query.toString().trim();
 
-    // Get suggestions from product names, brands, and categories
-    const suggestions = await Product.aggregate([
-      {
-        $match: {
-          $or: [
-            { name: { $regex: searchQuery, $options: "i" } },
-            { brand: { $regex: searchQuery, $options: "i" } },
-            { category: { $regex: searchQuery, $options: "i" } },
-            { tags: { $in: [new RegExp(searchQuery, "i")] } },
-          ],
-        },
-      },
-      {
-        $project: {
-          name: 1,
-          brand: 1,
-          category: 1,
-          tags: 1,
-          _id: 0,
-        },
-      },
-      { $limit: Number(limit) },
-    ]);
-
-    // Extract unique suggestions
-    const uniqueSuggestions = new Set();
-    const result: any[] = [];
-
-    suggestions.forEach((product) => {
-      if (product.name && !uniqueSuggestions.has(product.name)) {
-        uniqueSuggestions.add(product.name);
-        result.push({ type: "product", value: product.name });
-      }
-      if (product.brand && !uniqueSuggestions.has(product.brand)) {
-        uniqueSuggestions.add(product.brand);
-        result.push({ type: "brand", value: product.brand });
-      }
-      if (product.category && !uniqueSuggestions.has(product.category)) {
-        uniqueSuggestions.add(product.category);
-        result.push({ type: "category", value: product.category });
-      }
-      if (product.tags) {
-        product.tags.forEach((tag: string) => {
-          if (tag && !uniqueSuggestions.has(tag)) {
-            uniqueSuggestions.add(tag);
-            result.push({ type: "tag", value: tag });
-          }
-        });
-      }
-    });
-
-    res.status(200).json({
-      success: true,
-      data: result.slice(0, Number(limit)),
-    });
+    const result = await getSuggestionsService(searchQuery, Number(limit));
+    res.status(200).json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -285,31 +82,8 @@ export const getSearchSuggestions = async (req: Request, res: Response) => {
 export const getPopularSearches = async (req: Request, res: Response) => {
   try {
     const { limit = 10 } = req.query;
-
-    // This would typically come from a search analytics collection
-    // For now, we'll return popular categories and brands
-    const popularCategories = await Product.aggregate([
-      { $group: { _id: "$category", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: Number(limit) },
-      { $project: { category: "$_id", count: 1, _id: 0 } },
-    ]);
-
-    const popularBrands = await Product.aggregate([
-      { $match: { brand: { $exists: true, $ne: null } } },
-      { $group: { _id: "$brand", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: Number(limit) },
-      { $project: { brand: "$_id", count: 1, _id: 0 } },
-    ]);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        popularCategories,
-        popularBrands,
-      },
-    });
+    const data = await getPopularService(Number(limit));
+    res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -322,47 +96,8 @@ export const getPopularSearches = async (req: Request, res: Response) => {
 // Get filter options for search
 export const getFilterOptions = async (req: Request, res: Response) => {
   try {
-    const [categories, brands, priceRange, discountRange] = await Promise.all([
-      // Get unique categories
-      Product.distinct("category"),
-
-      // Get unique brands
-      Product.distinct("brand").then((brands) =>
-        brands.filter((brand) => brand)
-      ),
-
-      // Get price range
-      Product.aggregate([
-        {
-          $group: {
-            _id: null,
-            min: { $min: "$price" },
-            max: { $max: "$price" },
-          },
-        },
-      ]),
-
-      // Get discount range
-      Product.aggregate([
-        {
-          $group: {
-            _id: null,
-            min: { $min: "$discount" },
-            max: { $max: "$discount" },
-          },
-        },
-      ]),
-    ]);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        categories,
-        brands,
-        priceRange: priceRange[0] || { min: 0, max: 0 },
-        discountRange: discountRange[0] || { min: 0, max: 0 },
-      },
-    });
+    const data = await getFilterOptionsService();
+    res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(500).json({
       success: false,

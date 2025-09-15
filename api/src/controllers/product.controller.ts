@@ -1,15 +1,14 @@
 import { Request, Response } from "express";
-import Product, { IProduct } from "../models/Product";
+import { createNewProduct, deleteByBusinessId, getProductByBusinessId, listBestSellers, listProducts, listProductsByCategory, updateExistingProduct } from "../services/product.service";
 
 // Get all products
 export const getAllProducts = async (req: Request, res: Response) => {
   try {
-    const products = await Product.find();
-    res.status(200).json({
-      success: true,
-      data: products,
-      count: products.length,
+    const { products, pagination } = await listProducts({
+      page: Number(req.query.page || 1),
+      limit: Number(req.query.limit || 12),
     });
+    res.status(200).json({ success: true, data: products, count: products.length, pagination });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -23,11 +22,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
 export const getProductById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const product = await Product.findOneAndUpdate(
-      { id },
-      { $inc: { views: 1 } },
-      { new: true }
-    );
+    const product = await getProductByBusinessId(id);
 
     if (!product) {
       return res.status(404).json({
@@ -52,42 +47,8 @@ export const getProductById = async (req: Request, res: Response) => {
 // Create new product
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    const productData: Partial<IProduct> = req.body;
-
-    // Generate unique ID if not provided
-    if (!productData.id) {
-      const count = await Product.countDocuments();
-      productData.id = `PROD-${String(count + 1).padStart(4, "0")}`;
-    }
-
-    // Generate search keywords from name, brand, category, and tags
-    const searchKeywords: string[] = [];
-    if (productData.name) {
-      searchKeywords.push(...productData.name.toLowerCase().split(" "));
-    }
-    if (productData.brand) {
-      searchKeywords.push(productData.brand.toLowerCase());
-    }
-    if (productData.category) {
-      searchKeywords.push(productData.category.toLowerCase());
-    }
-    if (productData.tags) {
-      searchKeywords.push(...productData.tags.map((tag) => tag.toLowerCase()));
-    }
-
-    // Remove duplicates and empty strings
-    productData.searchKeywords = [
-      ...new Set(searchKeywords.filter((keyword) => keyword.trim())),
-    ];
-
-    const product = new Product(productData);
-    await product.save();
-
-    res.status(201).json({
-      success: true,
-      data: product,
-      message: "Product created successfully",
-    });
+    const product = await createNewProduct(req.body);
+    res.status(201).json({ success: true, data: product, message: "Product created successfully" });
   } catch (error) {
     res.status(400).json({
       success: false,
@@ -102,11 +63,7 @@ export const updateProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
-
-    const product = await Product.findOneAndUpdate({ id }, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const product = await updateExistingProduct(id, updateData);
 
     if (!product) {
       return res.status(404).json({
@@ -133,8 +90,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 export const deleteProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-
-    const product = await Product.findOneAndDelete({ id });
+    const product = await deleteByBusinessId(id);
 
     if (!product) {
       return res.status(404).json({
@@ -160,13 +116,12 @@ export const deleteProduct = async (req: Request, res: Response) => {
 export const getProductsByCategory = async (req: Request, res: Response) => {
   try {
     const { category } = req.params;
-    const products = await Product.find({ category });
-
-    res.status(200).json({
-      success: true,
-      data: products,
-      count: products.length,
+    const { products, pagination } = await listProductsByCategory({
+      category,
+      page: Number(req.query.page || 1),
+      limit: Number(req.query.limit || 12),
     });
+    res.status(200).json({ success: true, data: products, count: products.length, pagination });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -179,13 +134,8 @@ export const getProductsByCategory = async (req: Request, res: Response) => {
 // Get best sellers
 export const getBestSellers = async (req: Request, res: Response) => {
   try {
-    const products = await Product.find({ isBestSeller: true });
-
-    res.status(200).json({
-      success: true,
-      data: products,
-      count: products.length,
-    });
+    const products = await listBestSellers();
+    res.status(200).json({ success: true, data: products, count: products.length });
   } catch (error) {
     res.status(500).json({
       success: false,

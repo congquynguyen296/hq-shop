@@ -2,9 +2,13 @@ import { MenuIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { navLinks } from "../../data/navLinks";
 import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
 
 export default function Navbar() {
   const [openMobileMenu, setOpenMobileMenu] = useState(false);
+  const navigate = useNavigate();
+  const { user, logout } = useAuth()
 
   useEffect(() => {
     if (openMobileMenu) {
@@ -54,7 +58,14 @@ export default function Navbar() {
               {link.name}
             </Link>
           ))}
-          <button>Sign in</button>
+          {user ? (
+            <>
+              <span>{user.email}</span>
+              <button onClick={logout}>Logout</button>
+            </>
+          ) : (
+            <button onClick={() => navigate('/auth')}>Sign in</button>
+          )}
           <button
             className="aspect-square size-10 p-1 items-center justify-center bg-purple-600 hover:bg-purple-700 transition text-white rounded-md flex"
             onClick={() => setOpenMobileMenu(false)}
@@ -80,12 +91,32 @@ export default function Navbar() {
             </span>
           </Link>
 
-          <button className="hidden md:block hover:bg-slate-100 dark:hover:bg-purple-950 transition px-4 py-2 border border-purple-600 rounded-md ml-2">
-            Sign in
-          </button>
-          <button className="hidden md:block px-4 py-2 bg-purple-600 hover:bg-purple-700 transition text-white rounded-md">
-            Sign up
-          </button>
+          {user ? (
+            <>
+              <span className="hidden md:block text-sm">{user.email}</span>
+              <button
+                onClick={logout}
+                className="hidden md:block hover:bg-slate-100 dark:hover:bg-purple-950 transition px-4 py-2 border border-purple-600 rounded-md ml-2"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => navigate("/auth")}
+                className="hidden md:block hover:bg-slate-100 dark:hover:bg-purple-950 transition px-4 py-2 border border-purple-600 rounded-md ml-2"
+              >
+                Sign in
+              </button>
+              <button
+                onClick={() => navigate("/auth")}
+                className="hidden md:block px-4 py-2 bg-purple-600 hover:bg-purple-700 transition text-white rounded-md"
+              >
+                Sign up
+              </button>
+            </>
+          )}
 
           <button
             onClick={() => setOpenMobileMenu(!openMobileMenu)}

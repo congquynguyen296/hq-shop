@@ -1,8 +1,16 @@
 import CategoryCard from "../components/Cards/CategoryCard";
 import SectionTitle from "../components/Navs/SectionTitle";
-import { categoriesBrand } from "../data/categoriesBrand";
+import React from "react";
+import { apiGet, API_BASE_URL } from "../hooks/useApi";
 
 export default function CategorySection() {
+  const [categories, setCategories] = React.useState([]);
+  React.useEffect(() => {
+    apiGet('/api/categories')
+      .then((res) => setCategories(res.data || []))
+      .catch(() => setCategories([]));
+  }, []);
+
   return (
     <>
       <SectionTitle
@@ -12,12 +20,12 @@ export default function CategorySection() {
       />
 
       <div className="flex flex-wrap items-center justify-center gap-10 mt-16">
-        {categoriesBrand.map((category, index) => (
+        {categories.map((category, index) => (
           <CategoryCard
             key={index}
             title={category.title}
             description={category.description}
-            resource={category.resource}
+            resource={category.resource?.startsWith('http') ? category.resource : category.resource}
             color={category.color}
           />
         ))}

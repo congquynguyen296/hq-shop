@@ -12,7 +12,11 @@ export const navLinks = [
         href: "/blog",
     },
     {
+        name: "Chat",
+        href: "/chat",
+    },
+    {
         name: "About",
-        href: "/docs",
+        href: "/about",
     }
 ];

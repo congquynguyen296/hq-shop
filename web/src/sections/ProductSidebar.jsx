@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { apiGet } from "../hooks/useApi";
 import { Search, Filter, X, ChevronDown, ChevronUp } from "lucide-react";
 
-const ProductSidebar = ({ isOpen, onClose, onFilterChange }) => {
+const ProductSidebar = ({ isOpen, onClose, onFilterChange, externalFilters }) => {
     const [expandedSections, setExpandedSections] = useState({
         search: true,
         category: true,
@@ -18,7 +19,28 @@ const ProductSidebar = ({ isOpen, onClose, onFilterChange }) => {
         brand: []
     });
 
-    const categories = ["All", "Laptop", "Phone", "Headphones", "Monitor", "Tablet", "Earbuds", "Accessories"];
+    const [categories, setCategories] = useState(["All"]);
+
+    // Sync with external filters from parent
+    useEffect(() => {
+        if (externalFilters) {
+            setFilters((prev) => ({
+                ...prev,
+                ...externalFilters,
+            }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [externalFilters?.category, externalFilters?.priceRange, externalFilters?.rating, externalFilters?.brand, externalFilters?.search]);
+
+    // Load categories from API
+    useEffect(() => {
+        apiGet('/api/search/filters')
+            .then((res) => {
+                const list = res?.data?.categories || [];
+                setCategories(["All", ...list]);
+            })
+            .catch(() => setCategories(["All"]));
+    }, []);
     const brands = ["Apple", "Samsung", "Sony", "Dell", "HP", "Lenovo", "Asus", "Microsoft"];
     const ratings = [4, 3, 2, 1];
 

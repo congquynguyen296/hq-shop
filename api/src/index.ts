@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import connectDB from "./config/db";
 import productRoutes from "./routes/product.routes";
+import categoryRoutes from "./routes/category.routes";
 import searchRoutes from "./routes/search.routes";
 import authRoutes from "./routes/auth.routes";
 
@@ -17,6 +18,7 @@ app.use(express.json());
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.use("/api/products", productRoutes);
+app.use("/api/categories", categoryRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/auth", authRoutes);
 

@@ -63,9 +63,9 @@ const ProductCard = ({ product = {} }) => {
           <p>({product.rating})</p>
         </div>
         <div className="flex items-end justify-between mt-3">
-          <p className="md:text-xl text-base font-medium text-indigo-500">
+          <p className="md:text-xl text-base font-semibold text-indigo-500">
             ${product.offerPrice}{" "}
-            <span className="text-gray-500/60 dark:text-slate-400 md:text-sm text-xs line-through">
+            <span className="text-gray-500/60 dark:text-slate-400 md:text-sm text-xs font-medium line-through">
               ${product.price}
             </span>
           </p>

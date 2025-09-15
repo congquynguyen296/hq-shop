@@ -1,8 +1,15 @@
 import ProductCard from "../components/Cards/ProductCard";
 import SectionTitle from "../components/Navs/SectionTitle";
-import { products } from "../data/products";
+import React from "react";
+import { apiGet } from "../hooks/useApi";
 
 export default function SomeProduct() {
+  const [items, setItems] = React.useState([]);
+  React.useEffect(() => {
+    apiGet('/api/products', { page: 1, limit: 10 })
+      .then((res) => setItems(res.data || []))
+      .catch(() => setItems([]));
+  }, []);
 
   return (
     <>
@@ -13,7 +20,7 @@ export default function SomeProduct() {
       />
       <div className="container mx-auto px-6 mt-16">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 place-items-center">
-          {products.slice(0, 10).map((product) => (
+          {items.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>

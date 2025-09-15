@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { Filter, Grid, List, ChevronLeft, ChevronRight } from "lucide-react";
 import ProductCard from "../components/Cards/ProductCard";
-import { products as productsData } from "../data/products";
+import { apiGet } from "../hooks/useApi";
 import ProductSidebar from "../sections/ProductSidebar";
 
 export default function Products() {
@@ -18,76 +18,48 @@ export default function Products() {
     brand: [],
   });
 
-  const productsPerPage = 9;
+  // Server-side data and pagination (lazy load)
+  const [items, setItems] = useState([]);
+  const [hasNextPage, setHasNextPage] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Use centralized data
-  const allProducts = productsData;
-
-  // Normalize data to ensure `image` exists (fallback to first of `images`)
-  const allProductsNormalized = useMemo(() => allProducts, [allProducts]);
-
-  // Filter and sort products
-  const filteredProducts = useMemo(() => {
-    let filtered = allProductsNormalized.filter((product) => {
-      // Category filter
-      if (filters.category !== "All" && product.category !== filters.category) {
-        return false;
+  const fetchPage = async (page) => {
+    setIsLoading(true);
+    try {
+      const params = {
+        page,
+        limit: 9,
+        sortBy: sortBy === 'rating' ? 'rating' : sortBy === 'newest' ? 'createdAt' : 'relevance',
+        sortOrder: 'desc',
+      };
+      // Use search API to support category and ranges
+      const queryParams = { ...params };
+      if (filters.category && filters.category !== 'All') queryParams.category = filters.category;
+      if (filters.priceRange) {
+        queryParams.minPrice = filters.priceRange[0];
+        queryParams.maxPrice = filters.priceRange[1];
       }
-
-      // Price range filter
-      if (
-        product.offerPrice < filters.priceRange[0] ||
-        product.offerPrice > filters.priceRange[1]
-      ) {
-        return false;
-      }
-
-      // Rating filter
-      if (
-        filters.rating.length > 0 &&
-        !filters.rating.some((rating) => product.rating >= rating)
-      ) {
-        return false;
-      }
-
-      return true;
-    });
-
-    // Sort products
-    switch (sortBy) {
-      case "price-low":
-        filtered.sort((a, b) => a.offerPrice - b.offerPrice);
-        break;
-      case "price-high":
-        filtered.sort((a, b) => b.offerPrice - a.offerPrice);
-        break;
-      case "rating":
-        filtered.sort((a, b) => b.rating - a.rating);
-        break;
-      case "newest":
-        filtered.sort((a, b) => b.id - a.id);
-        break;
-      default: // popular
-        filtered.sort((a, b) => b.rating - a.rating);
+      if (filters.rating?.length) queryParams.minRating = Math.min(...filters.rating);
+      const res = await apiGet('/api/search', queryParams);
+      const data = res.data || [];
+      const pagination = res.pagination || { hasNextPage: false };
+      if (page === 1) setItems(data);
+      else setItems((prev) => [...prev, ...data]);
+      setHasNextPage(!!pagination.hasNextPage);
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    return filtered;
-  }, [allProductsNormalized, filters, sortBy]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
-  const startIndex = (currentPage - 1) * productsPerPage;
-  const endIndex = startIndex + productsPerPage;
-  const currentProducts = filteredProducts.slice(startIndex, endIndex);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const handleLoadMore = () => {
+    const next = currentPage + 1;
+    setCurrentPage(next);
+    fetchPage(next);
   };
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   };
 
   // Read category from query string
@@ -96,13 +68,15 @@ export default function Products() {
     const params = new URLSearchParams(location.search);
     const categoryParam = params.get("category");
     if (categoryParam) {
-      setFilters((prev) => ({
-        ...prev,
-        category: categoryParam,
-      }));
+      setFilters((prev) => ({ ...prev, category: categoryParam }));
       setCurrentPage(1);
     }
   }, [location.search]);
+
+  // Fetch when filters or sort change
+  useEffect(() => {
+    fetchPage(1);
+  }, [filters, sortBy]);
 
   return (
     <>
@@ -128,6 +102,7 @@ export default function Products() {
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onFilterChange={handleFilterChange}
+            externalFilters={filters}
           />
 
           {/* Products Grid */}
@@ -147,9 +122,7 @@ export default function Products() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <div className="flex items-center gap-4">
                 <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Showing {startIndex + 1}-
-                  {Math.min(endIndex, filteredProducts.length)} of{" "}
-                  {filteredProducts.length} products
+                  Showing {items.length} products
                 </span>
               </div>
 
@@ -193,21 +166,31 @@ export default function Products() {
               </div>
             </div>
 
+            {/* Discount */}
+            <div className="flex items-center divide-x divide-gray-300 py-1 text-sm border-none rounded-full mb-6 mt-[-6]">
+              <span className="pr-1 pl-3 text-lg">🔥</span>
+
+              <span className="pl-2 pr-5 bg-gradient-to-r from-rose-500 to-indigo-500 font-medium bg-clip-text text-transparent">
+                Landing shop gives you many vouchers up to 50% of product value.
+                Get it now !!!
+              </span>
+            </div>
+
             {/* Products Grid */}
             <div
               className={`grid gap-6 ${
                 viewMode === "grid"
                   ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-                  : "grid-cols-1"
+                  : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
               }`}
             >
-              {currentProducts.map((product) => (
+              {items.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
             </div>
 
             {/* No Results */}
-            {currentProducts.length === 0 && (
+            {items.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-slate-500 dark:text-slate-400 text-lg">
                   No products found matching your criteria.
@@ -229,44 +212,16 @@ export default function Products() {
               </div>
             )}
 
-            {/* Pagination */}
-            {totalPages > 1 && (
+            {/* Load More */}
+            {hasNextPage && (
               <div className="flex justify-center mt-12">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                  >
-                    <ChevronLeft size={16} />
-                    Previous
-                  </button>
-
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                    (page) => (
-                      <button
-                        key={page}
-                        onClick={() => handlePageChange(page)}
-                        className={`px-3 py-2 rounded-md transition-colors ${
-                          currentPage === page
-                            ? "bg-purple-600 text-white"
-                            : "border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    )
-                  )}
-
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                  >
-                    Next
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
+                <button
+                  onClick={handleLoadMore}
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 transition text-white rounded-md disabled:opacity-50"
+                >
+                  {isLoading ? 'Loading...' : 'Load More'}
+                </button>
               </div>
             )}
           </div>

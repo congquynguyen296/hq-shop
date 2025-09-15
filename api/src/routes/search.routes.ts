@@ -9,7 +9,7 @@ import {
 const router = Router();
 
 // Search routes
-router.get("/", searchProducts); // Main search endpoint
+router.get("/", searchProducts); // Main search endpoint with pagination
 router.get("/suggestions", getSearchSuggestions); // Autocomplete suggestions
 router.get("/popular", getPopularSearches); // Popular search terms
 router.get("/filters", getFilterOptions); // Available filter options
