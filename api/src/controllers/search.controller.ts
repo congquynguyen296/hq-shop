@@ -5,6 +5,7 @@ import {
   getPopularService,
   getSuggestionsService,
   searchProductsService,
+  searchWithElasticsearch,
 } from "../services/search.service";
 import esClient from "../config/elastic";
 
@@ -68,55 +69,22 @@ export const searchProducts = async (req: Request, res: Response) => {
 
   if (searchText.length > 0) {
     try {
-      const from = (Number(page) - 1) * Number(limit);
-
-      const esResult = await esClient.search({
-        index: "products",
-        from,
-        size: Number(limit),
-        query: {
-          multi_match: {
-            query: searchText,
-            fields: ["name^3", "description", "category", "brand", "tags"],
-            fuzziness: "AUTO",
-          },
-        },
-        sort:
-          sortBy === "relevance"
-            ? undefined
-            : [
-                {
-                  [sortBy as string]: {
-                    order: sortOrder === "asc" ? "asc" : "desc",
-                    unmapped_type: "keyword",
-                  },
-                },
-              ],
-      } as any);
-
-      const total = (esResult.hits.total as any)?.value ?? 0;
-      const hits = esResult.hits.hits.map((hit: any) => ({
-        id: hit._source?.id ?? hit._id,
-        ...hit._source,
-      }));
+      const esResult = await searchWithElasticsearch(searchText, {
+        ...req.query,
+        sortBy,
+        sortOrder,
+        page,
+        limit,
+      });
 
       return res.status(200).json({
-        success: true,
-        source: "elasticsearch",
-        data: hits,
-        pagination: {
-          currentPage: Number(page),
-          totalPages: Math.ceil(total / Number(limit)),
-          totalCount: total,
-          hasNextPage: Number(page) * Number(limit) < total,
-          hasPrevPage: Number(page) > 1,
-          limit: Number(limit),
-        },
+        ...esResult,
         filters: req.query,
         sort: { by: sortBy, order: sortOrder },
       });
     } catch (error) {
       // Fall through to Mongo service on ES error
+      console.error("Elasticsearch error, falling back to MongoDB:", error);
     }
   }
 

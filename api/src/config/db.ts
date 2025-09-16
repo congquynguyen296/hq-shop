@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import esClient from "./elastic";
 import { syncProductsToES } from "../services/search.service";
 
 const connectDB = async () => {
@@ -9,6 +10,7 @@ const connectDB = async () => {
     console.log(`Database: ${conn.connection.db?.databaseName || "Unknown"}`);
 
     // Sync ES
+    // await esClient.indices.delete({ index: 'products' });
     syncProductsToES();
     
   } catch (error) {

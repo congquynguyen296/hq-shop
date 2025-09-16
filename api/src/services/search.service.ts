@@ -214,11 +214,144 @@ export async function getFilterOptionsService() {
   };
 }
 
+// Search with Elasticsearch
+export async function searchWithElasticsearch(
+  searchText: string,
+  filters: SearchFilters
+) {
+  const {
+    sortBy = "relevance",
+    sortOrder = "desc",
+    page = 1,
+    limit = 9,
+  } = filters;
+
+  const from = (Number(page) - 1) * Number(limit);
+
+  // Build Elasticsearch query
+  const query: any = {
+    multi_match: {
+      query: searchText,
+      fields: ["name^3", "description", "category", "brand", "tags"],
+      fuzziness: "AUTO",
+    },
+  };
+
+  // Add filters to the query
+  const mustClauses: any[] = [query];
+
+  if (filters.category) {
+    const categories = Array.isArray(filters.category) 
+      ? filters.category 
+      : [filters.category];
+    mustClauses.push({
+      terms: { category: categories }
+    });
+  }
+
+  if (filters.brand) {
+    const brands = Array.isArray(filters.brand) 
+      ? filters.brand 
+      : [filters.brand];
+    mustClauses.push({
+      terms: { brand: brands }
+    });
+  }
+
+  if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+    const priceRange: any = {};
+    if (filters.minPrice !== undefined) priceRange.gte = filters.minPrice;
+    if (filters.maxPrice !== undefined) priceRange.lte = filters.maxPrice;
+    mustClauses.push({
+      range: { price: priceRange }
+    });
+  }
+
+  if (filters.minRating !== undefined) {
+    mustClauses.push({
+      range: { rating: { gte: filters.minRating } }
+    });
+  }
+
+  if (filters.isBestSeller !== undefined) {
+    mustClauses.push({
+      term: { isBestSeller: filters.isBestSeller }
+    });
+  }
+
+  if (filters.isNewProduct !== undefined) {
+    mustClauses.push({
+      term: { isNewProduct: filters.isNewProduct }
+    });
+  }
+
+  if (filters.tags) {
+    const tags = Array.isArray(filters.tags) 
+      ? filters.tags 
+      : [filters.tags];
+    mustClauses.push({
+      terms: { tags: tags }
+    });
+  }
+
+  // Build sort clause
+  let sort: any = undefined;
+  if (sortBy !== "relevance") {
+    sort = [
+      {
+        [sortBy as string]: {
+          order: sortOrder === "asc" ? "asc" : "desc",
+          unmapped_type: "keyword",
+        },
+      },
+    ];
+  }
+
+  try {
+    const esResult = await esClient.search({
+      index: "products",
+      from,
+      size: Number(limit),
+      query: {
+        bool: {
+          must: mustClauses,
+        },
+      },
+      sort,
+    } as any);
+
+    const total = (esResult.hits.total as any)?.value ?? 0;
+    const hits = esResult.hits.hits.map((hit: any) => ({
+      id: hit._source?.id ?? hit._id,
+      ...hit._source,
+    }));
+
+    console.log(hits);
+
+    return {
+      success: true,
+      source: "elasticsearch",
+      data: hits,
+      pagination: {
+        currentPage: Number(page),
+        totalPages: Math.ceil(total / Number(limit)),
+        totalCount: total,
+        hasNextPage: Number(page) * Number(limit) < total,
+        hasPrevPage: Number(page) > 1,
+        limit: Number(limit),
+      },
+    };
+  } catch (error) {
+    console.error("Elasticsearch search error:", error);
+    throw error;
+  }
+}
+
 // Search Elastic
 export const syncProductsToES = async () => {
   const products = await Product.find();
   const body = products.flatMap((doc) => [
-    { index: { _index: "products", _id: doc.id.toString() } },
+    { index: { _index: "products", _id: doc.id } },
     {
       id: doc.id,
       name: doc.name,
